@@ -39,8 +39,8 @@ final class Recorder {
         let finished: (AVAssetWriter, URL)? = lock.withLock {
             pendingStart = false
             startDate = nil
-            guard let writer = writer else { return nil }
-            let url = writer.outputURL
+            guard let activeWriter = self.writer else { return nil }
+            let url = activeWriter.outputURL
             videoInput?.markAsFinished()
             audioInput?.markAsFinished()
             self.writer = nil
@@ -48,16 +48,16 @@ final class Recorder {
             audioInput = nil
             adaptor = nil
             sessionStarted = false
-            return (writer, url)
+            return (activeWriter, url)
         }
         guard let result = finished else { return }
-        let writer = result.0
-        let url = result.1
-        writer.finishWriting {
-            if writer.status == .completed {
-                Self.saveVideoToPhotos(url)
+        let finishedWriter = result.0
+        let fileURL = result.1
+        finishedWriter.finishWriting {
+            if finishedWriter.status == .completed {
+                Self.saveVideoToPhotos(fileURL)
             } else {
-                AppLog.write("Enregistrement raté : \(writer.error?.localizedDescription ?? "erreur inconnue")")
+                AppLog.write("Enregistrement raté : \(finishedWriter.error?.localizedDescription ?? "erreur inconnue")")
             }
         }
     }
