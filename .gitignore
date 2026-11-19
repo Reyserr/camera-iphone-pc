@@ -14,3 +14,10 @@ ios/Payload/
 # Ajoutés par la compilation GitHub
 pc/CameraPC/VirtualCam/
 ext/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.jks

@@ -8,6 +8,7 @@ on:
       - "pc/**"
       - ".github/workflows/build-pc.yml"
   workflow_dispatch:
+  workflow_call:
 
 env:
   # Version de softcam utilisée (https://github.com/tshino/softcam, licence MIT)

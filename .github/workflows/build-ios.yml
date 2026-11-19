@@ -8,6 +8,7 @@ on:
       - "ios/**"
       - ".github/workflows/build-ios.yml"
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   build:
