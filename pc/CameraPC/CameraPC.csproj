@@ -23,7 +23,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Assets\LynxCam.ico" />
     <Resource Include="Assets\LynxCam.png" />
     <!-- Webcam virtuelle : softcam.dll, ajoutée par la compilation GitHub (build-pc.yml). -->
     <None Include="VirtualCam\**\*.dll" CopyToOutputDirectory="PreserveNewest" />

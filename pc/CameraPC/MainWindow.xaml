@@ -4,7 +4,7 @@
         Title="LynxCam"
         Width="1360" Height="880" MinWidth="1080" MinHeight="640"
         WindowStartupLocation="CenterScreen"
-        Icon="Assets/LynxCam.ico"
+        Icon="Assets/LynxCam.png"
         Closing="Window_Closing">
     <Grid>
         <Grid.RowDefinitions>
