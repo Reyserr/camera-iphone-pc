@@ -21,7 +21,7 @@ namespace CameraPC;
 
 public partial class MainWindow : Window
 {
-    /// <summary>Thèmes d'arrière-plan : mêmes noms et couleurs que dans l'app iPhone.</summary>
+    /// <summary>Thèmes d'arrière-plan : mêmes noms et couleurs que dans les apps iPhone et Android.</summary>
     private static readonly (string Key, string Name, string From, string To)[] Themes =
     {
         ("nuit", "Nuit", "#141E30", "#243B55"),
@@ -85,14 +85,15 @@ public partial class MainWindow : Window
         UpdateModeUi();
         UpdateBackgroundUi();
         UpdateVirtualCamUi();
-        AddLog("Prêt. Ouvre LynxCam sur l'iPhone, choisis Wi-Fi ou câble USB, puis clique sur « Se connecter ».");
+        AddLog("Prêt. Ouvre LynxCam sur le téléphone, choisis Wi-Fi ou câble USB, puis clique sur « Se connecter ».");
     }
 
     private void Ui(Action action) => Dispatcher.InvokeAsync(action);
 
     // ═════════════ Connexion ═════════════
 
-    private bool UsbMode => SelectedTag(ModeBox) == "usb";
+    private string Mode => SelectedTag(ModeBox) ?? "wifi";
+    private bool UsbMode => Mode != "wifi";
 
     private void ModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -126,7 +127,7 @@ public partial class MainWindow : Window
             string host = HostBox.Text.Trim();
             if (host.Length == 0)
             {
-                SetStatus("Saisis l'adresse IP affichée sur l'iPhone.", "ErrorBrush");
+                SetStatus("Saisis l'adresse IP affichée sur le téléphone.", "ErrorBrush");
                 return;
             }
             _settings.Host = host;
@@ -147,15 +148,21 @@ public partial class MainWindow : Window
             UpdateConnectButton();
             SetStatus("Échec : " + ex.Message, "ErrorBrush");
             AddLog("Connexion impossible : " + ex.Message);
-            AddLog(UsbMode
-                ? "Vérifie : iPhone branché et déverrouillé, app LynxCam ouverte, iTunes installé."
-                : "Vérifie : même Wi-Fi, app LynxCam ouverte sur l'iPhone, accès au réseau local autorisé.");
+            AddLog(Mode switch
+            {
+                "usb" => "Vérifie : iPhone branché et déverrouillé, app LynxCam ouverte, iTunes installé.",
+                "adb" => "Vérifie : câble branché, débogage USB activé et autorisé sur le téléphone, app LynxCam ouverte.",
+                _ => "Vérifie : même Wi-Fi, app LynxCam ouverte sur le téléphone, accès au réseau local autorisé.",
+            });
         }
     }
 
-    private Task ConnectOnceAsync(CancellationToken ct) => UsbMode
-        ? _phone.ConnectUsbAsync(_settings.Port, ct)
-        : _phone.ConnectAsync(_settings.Host, _settings.Port, ct);
+    private Task ConnectOnceAsync(CancellationToken ct) => Mode switch
+    {
+        "usb" => _phone.ConnectUsbAsync(_settings.Port, ct),
+        "adb" => _phone.ConnectAndroidUsbAsync(_settings.Port, ct),
+        _ => _phone.ConnectAsync(_settings.Host, _settings.Port, ct),
+    };
 
     private void OnConnectionChanged(bool connected)
     {
@@ -163,7 +170,7 @@ public partial class MainWindow : Window
         {
             _reconnectCts?.Cancel();
             SetStatus($"Connecté ({_phone.Mode})", "ConnectedBrush");
-            AddLog($"Connecté à l'iPhone ({_phone.Mode}).");
+            AddLog($"Connecté au téléphone ({_phone.Mode}).");
             SetControlsEnabled(true);
             SendAllSettings();
         }
@@ -231,7 +238,7 @@ public partial class MainWindow : Window
         StatusDot.Fill = brush;
     }
 
-    // ═════════════ Envoi des réglages à l'iPhone ═════════════
+    // ═════════════ Envoi des réglages au téléphone ═════════════
 
     private void Send(string command, object value)
     {
@@ -240,7 +247,7 @@ public partial class MainWindow : Window
 
     private void MarkDirty() => _settingsDirty = true;
 
-    /// <summary>À la connexion, le PC impose tous ses réglages à l'iPhone.</summary>
+    /// <summary>À la connexion, le PC impose tous ses réglages au téléphone.</summary>
     private void SendAllSettings()
     {
         var s = _settings;
@@ -269,17 +276,17 @@ public partial class MainWindow : Window
         UpdateAllLabels();
     }
 
-    // ═════════════ Messages de l'iPhone ═════════════
+    // ═════════════ Messages du téléphone ═════════════
 
     private void OnHello(JsonElement hello)
     {
-        string name = GetString(hello, "name") ?? "iPhone";
+        string name = GetString(hello, "name") ?? "Téléphone";
         string system = GetString(hello, "system") ?? "";
         DeviceText.Text = name;
         DeviceText.ToolTip = $"{name} — {system}";
-        AddLog($"iPhone : {name} ({system})");
+        AddLog($"Téléphone : {name} ({system})");
         if ((GetNumber(hello, "protocol") ?? 1) < 2)
-            AddLog("L'app de l'iPhone est ancienne : réinstalle LynxCam.ipa pour avoir toutes les fonctions.");
+            AddLog("L'app du téléphone est ancienne : réinstalle la dernière version de LynxCam pour avoir toutes les fonctions.");
     }
 
     private void OnStatus(JsonElement status)
@@ -302,7 +309,7 @@ public partial class MainWindow : Window
             AddLog($"Cet objectif ne fait que {applied} img/s dans cette résolution.");
         }
 
-        // Les boutons de l'iPhone peuvent changer la caméra, la lampe, le micro ou l'enregistrement : on suit.
+        // Les boutons du téléphone peuvent changer la caméra, la lampe, le micro ou l'enregistrement : on suit.
         _updating = true;
         if (GetString(status, "camera") is { } camera) SelectByTag(CameraBox, camera);
         if (GetBool(status, "torch") is { } torch) TorchToggle.IsChecked = torch;
@@ -325,7 +332,7 @@ public partial class MainWindow : Window
         {
             string path = NewPicturePath("photo");
             File.WriteAllBytes(path, jpeg);
-            Ui(() => AddLog($"Photo enregistrée : {path} (et dans la galerie de l'iPhone)"));
+            Ui(() => AddLog($"Photo enregistrée : {path} (et dans la galerie du téléphone)"));
         }
         catch (Exception ex)
         {
@@ -421,7 +428,7 @@ public partial class MainWindow : Window
             OverlayBorder.Visibility = Visibility.Visible;
         }
 
-        // Sans image de l'iPhone, la webcam virtuelle affiche « En attente de l'iPhone ».
+        // Sans image du téléphone, la webcam virtuelle affiche « En attente du téléphone ».
         if (_virtualCam.IsRunning)
         {
             var idle = DateTime.UtcNow - new DateTime(Interlocked.Read(ref _lastWebcamFrameTicks), DateTimeKind.Utc);
@@ -579,7 +586,7 @@ public partial class MainWindow : Window
             var title = new FormattedText("LynxCam", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
                 new Typeface("Segoe UI Semibold"), height / 9.0, Brushes.White, pixelsPerDip);
             dc.DrawText(title, new Point((width - title.Width) / 2, height / 2.0 - title.Height));
-            var subtitle = new FormattedText("En attente de l'iPhone…", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            var subtitle = new FormattedText("En attente du téléphone…", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
                 new Typeface("Segoe UI"), height / 26.0, new SolidColorBrush(Color.FromRgb(0x9A, 0xA0, 0xAA)), pixelsPerDip);
             dc.DrawText(subtitle, new Point((width - subtitle.Width) / 2, height / 2.0 + height / 40.0));
         }
@@ -735,7 +742,7 @@ public partial class MainWindow : Window
         Send("background", "image");
     }
 
-    /// <summary>Envoie la photo d'arrière-plan à l'iPhone, réduite à 1920 pixels maximum.</summary>
+    /// <summary>Envoie la photo d'arrière-plan au téléphone, réduite à 1920 pixels maximum.</summary>
     private void SendBackgroundPhoto()
     {
         string path = _settings.BackgroundPhoto;
@@ -888,7 +895,7 @@ public partial class MainWindow : Window
 
     // ═════════════ Outils ═════════════
 
-    /// <summary>Recopie les réglages sauvegardés dans les contrôles, sans rien envoyer à l'iPhone.</summary>
+    /// <summary>Recopie les réglages sauvegardés dans les contrôles, sans rien envoyer au téléphone.</summary>
     private void ApplySettingsToControls()
     {
         var s = _settings;

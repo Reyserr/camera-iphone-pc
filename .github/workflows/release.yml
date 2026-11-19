@@ -1,0 +1,56 @@
+# Compile les trois apps et publie une page de téléchargement publique (onglet « Releases » du dépôt).
+# Lancement : onglet Actions › « Publier une version » › Run workflow, ou envoi d'un tag v2.0.0, v2.1.0…
+name: Publier une version
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Numéro de version (ex. v2.0.1)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  ios:
+    uses: ./.github/workflows/build-ios.yml
+  android:
+    uses: ./.github/workflows/build-android.yml
+    secrets: inherit
+  windows:
+    uses: ./.github/workflows/build-pc.yml
+
+  release:
+    needs: [ios, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Récupérer les apps compilées
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Préparer les fichiers
+        run: |
+          mkdir release
+          cp dist/LynxCam-ipa/LynxCam.ipa release/
+          cp dist/LynxCam-android/LynxCam.apk release/
+          (cd dist/LynxCam-windows && zip -qr ../../release/LynxCam-Windows.zip .)
+          ls -lh release
+
+      - name: Publier la page de téléchargement
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" release/* \
+            --title "LynxCam $TAG" \
+            --notes-file .github/release-notes.md \
+            --target "$GITHUB_SHA" \
+            --latest

@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 namespace CameraPC.Net;
 
 /// <summary>
-/// Connexion vers l'app iPhone, en Wi-Fi (adresse IP) ou par câble USB : reçoit les images, le son et l'état,
+/// Connexion vers l'app LynxCam du téléphone (iPhone ou Android), en Wi-Fi ou par câble USB : reçoit les images, le son et l'état,
 /// envoie les commandes. Les événements sont levés sur un fil de fond (pas sur le fil de l'interface).
 /// </summary>
 public sealed class PhoneClient : IDisposable
@@ -28,10 +28,10 @@ public sealed class PhoneClient : IDisposable
     public event Action<bool>? ConnectionChanged;
     public event Action<JsonElement>? HelloReceived;
     public event Action<JsonElement>? StatusReceived;
-    /// <summary>Image reçue : message complet (l'image JPEG commence à l'octet 8) et horodatage iPhone en ms.</summary>
+    /// <summary>Image reçue : message complet (l'image JPEG commence à l'octet 8) et horodatage du téléphone en ms.</summary>
     public event Action<byte[], ulong>? FrameReceived;
     public event Action<AudioPacket>? AudioReceived;
-    /// <summary>Photo prise par l'iPhone (JPEG pleine qualité).</summary>
+    /// <summary>Photo prise par le téléphone (JPEG pleine qualité).</summary>
     public event Action<byte[]>? PhotoReceived;
     /// <summary>Temps d'aller-retour mesuré, en millisecondes.</summary>
     public event Action<double>? PingMeasured;
@@ -41,7 +41,7 @@ public sealed class PhoneClient : IDisposable
         get { lock (_gate) return _client != null; }
     }
 
-    /// <summary>« Wi-Fi » ou « USB » pendant une connexion.</summary>
+    /// <summary>« Wi-Fi », « USB iPhone » ou « USB Android » pendant une connexion.</summary>
     public string Mode { get; private set; } = "";
 
     public long TakeBytesReceived() => Interlocked.Exchange(ref _bytesReceived, 0);
@@ -65,13 +65,34 @@ public sealed class PhoneClient : IDisposable
 
     /// <summary>Connexion par câble USB au premier iPhone branché.</summary>
     public Task ConnectUsbAsync(int port, CancellationToken cancellationToken = default) =>
-        ConnectCoreAsync("USB", "USB", async ct =>
+        ConnectCoreAsync("USB iPhone", "iPhone en USB", async ct =>
         {
             var devices = await UsbMux.ListDevicesAsync(ct);
             var device = devices.FirstOrDefault()
                          ?? throw new IOException("aucun iPhone branché en USB (déverrouille-le et touche « Se fier »).");
             return await UsbMux.ConnectAsync(device.Id, port, ct);
         }, cancellationToken);
+
+    /// <summary>Connexion par câble USB à un téléphone Android (outil adb de Google, téléchargé si besoin).</summary>
+    public async Task ConnectAndroidUsbAsync(int port, CancellationToken cancellationToken = default)
+    {
+        string adb = await AdbBridge.EnsureAdbAsync(message => Log?.Invoke(message), cancellationToken);
+        await ConnectCoreAsync("USB Android", "Android en USB", async ct =>
+        {
+            await AdbBridge.ForwardAsync(adb, port, ct);
+            var client = new TcpClient { NoDelay = true, ReceiveBufferSize = 1 << 20 };
+            try
+            {
+                await client.ConnectAsync("127.0.0.1", AdbBridge.LocalPort, ct);
+                return client;
+            }
+            catch
+            {
+                client.Dispose();
+                throw;
+            }
+        }, cancellationToken);
+    }
 
     private async Task ConnectCoreAsync(string mode, string target, Func<CancellationToken, Task<TcpClient>> open,
                                         CancellationToken cancellationToken)
@@ -88,7 +109,7 @@ public sealed class PhoneClient : IDisposable
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                throw new TimeoutException($"pas de réponse de {target} après 6 secondes.");
+                throw new TimeoutException($"pas de réponse ({target}) après 6 secondes.");
             }
         }
 
@@ -168,7 +189,7 @@ public sealed class PhoneClient : IDisposable
         }
         catch (EndOfStreamException)
         {
-            Log?.Invoke("L'iPhone a fermé la connexion.");
+            Log?.Invoke("Le téléphone a fermé la connexion (app LynxCam fermée ?).");
         }
         catch (Exception ex)
         {
@@ -205,7 +226,7 @@ public sealed class PhoneClient : IDisposable
                 if (TryParseJson(payload, out var status)) StatusReceived?.Invoke(status);
                 break;
             case WireProtocol.Log:
-                Log?.Invoke("[iPhone] " + Encoding.UTF8.GetString(payload));
+                Log?.Invoke("[téléphone] " + Encoding.UTF8.GetString(payload));
                 break;
             case WireProtocol.Pong when payload.Length == 8:
                 long sent = BinaryPrimitives.ReadInt64BigEndian(payload);

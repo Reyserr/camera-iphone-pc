@@ -20,7 +20,7 @@
                     <Image Source="Assets/LynxCam.png" Width="34" Height="34" RenderOptions.BitmapScalingMode="HighQuality" />
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="LynxCam" FontSize="20" FontWeight="Bold" />
-                        <TextBlock Text="Ton iPhone comme webcam" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="Ton téléphone comme webcam" FontSize="11" Foreground="{StaticResource MutedBrush}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -28,12 +28,13 @@
                     <Ellipse x:Name="StatusDot" Width="10" Height="10" Fill="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                     <TextBlock x:Name="StatusText" Text="Déconnecté" Margin="8,0,18,0" VerticalAlignment="Center"
                                MaxWidth="380" TextTrimming="CharacterEllipsis" />
-                    <ComboBox x:Name="ModeBox" Width="150" VerticalAlignment="Center" SelectionChanged="ModeBox_SelectionChanged">
+                    <ComboBox x:Name="ModeBox" Width="190" VerticalAlignment="Center" SelectionChanged="ModeBox_SelectionChanged">
                         <ComboBoxItem Content="Wi-Fi" Tag="wifi" />
-                        <ComboBoxItem Content="Câble USB" Tag="usb" />
+                        <ComboBoxItem Content="Câble USB (iPhone)" Tag="usb" />
+                        <ComboBoxItem Content="Câble USB (Android)" Tag="adb" />
                     </ComboBox>
                     <TextBox x:Name="HostBox" Width="170" Margin="8,0,0,0" VerticalAlignment="Center"
-                             ToolTip="Adresse IP affichée sur l'iPhone" KeyDown="ConnectionBox_KeyDown" />
+                             ToolTip="Adresse IP affichée sur le téléphone" KeyDown="ConnectionBox_KeyDown" />
                     <Button x:Name="ConnectButton" Content="Se connecter" MinWidth="140" Margin="8,0,0,0"
                             VerticalAlignment="Center" Click="ConnectButton_Click" />
                 </StackPanel>
@@ -59,7 +60,7 @@
                         <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="Linear" />
                         <TextBlock x:Name="PlaceholderText" HorizontalAlignment="Center" VerticalAlignment="Center"
                                    TextAlignment="Center" FontSize="15" Foreground="{StaticResource MutedBrush}"
-                                   Text="Aucune image&#x0a;Ouvre LynxCam sur l'iPhone puis clique sur « Se connecter »" />
+                                   Text="Aucune image&#x0a;Ouvre LynxCam sur le téléphone puis clique sur « Se connecter »" />
 
                         <Border x:Name="RecBadge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="14"
                                 Background="#CC000000" CornerRadius="12" Padding="12,5" Visibility="Collapsed">
@@ -81,9 +82,9 @@
                     <ToggleButton x:Name="TorchToggle" Content="Lampe" Margin="4" Padding="14,8" Click="TorchToggle_Click" />
                     <ToggleButton x:Name="MicToggle" Content="Micro" Margin="4" Padding="14,8" Click="MicToggle_Click" />
                     <Button Content="Photo" Margin="4" Padding="14,8" Click="Photo_Click"
-                            ToolTip="Photo dans la galerie de l'iPhone et dans Images\LynxCam" />
+                            ToolTip="Photo dans la galerie du téléphone et dans Images\LynxCam" />
                     <ToggleButton x:Name="RecordToggle" Margin="4" Padding="14,8" Click="RecordToggle_Click"
-                                  ToolTip="Vidéo enregistrée dans la galerie de l'iPhone">
+                                  ToolTip="Vidéo enregistrée dans la galerie du téléphone">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="10" Height="10" Fill="{StaticResource RecordBrush}" VerticalAlignment="Center" />
                             <TextBlock x:Name="RecordLabel" Text="Enregistrer" Margin="7,0,0,0" />
@@ -197,7 +198,7 @@
                             </StackPanel>
 
                             <TextBlock Style="{StaticResource Hint}"
-                                       Text="La puce de l'iPhone détoure la personne, comme le mode Portrait." />
+                                       Text="Le téléphone détoure la personne, comme le mode Portrait." />
                         </StackPanel>
                     </Expander>
 
@@ -240,7 +241,7 @@
                     <!-- Son -->
                     <Expander Header="Son" Margin="0,0,0,8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                         <StackPanel Margin="4,0,4,8">
-                            <CheckBox x:Name="MicBox" Content="Micro de l'iPhone" Margin="0,8,0,0" Click="MicBox_Click" />
+                            <CheckBox x:Name="MicBox" Content="Micro du téléphone" Margin="0,8,0,0" Click="MicBox_Click" />
                             <TextBlock Text="Sortie du son sur le PC" Style="{StaticResource FieldLabel}" />
                             <ComboBox x:Name="AudioDeviceBox" DisplayMemberPath="Value" SelectionChanged="AudioDeviceBox_SelectionChanged" />
                             <TextBlock x:Name="VolumeLabel" Text="Volume : 100 %" Style="{StaticResource FieldLabel}" />
