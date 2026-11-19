@@ -1,5 +1,5 @@
-# Compile l'app PC sur une machine Windows de GitHub et fournit CameraPC.exe prêt à lancer.
-# (Tu peux aussi la compiler toi-même avec Visual Studio : ouvre pc/CameraPC.sln.)
+# Compile LynxCam pour Windows (avec la webcam virtuelle) et fournit un dossier prêt à lancer.
+# Tu peux aussi compiler l'app toi-même avec Visual Studio (pc/CameraPC.sln), mais sans la webcam virtuelle.
 name: Build PC
 
 on:
@@ -9,10 +9,14 @@ on:
       - ".github/workflows/build-pc.yml"
   workflow_dispatch:
 
+env:
+  # Version de softcam utilisée (https://github.com/tshino/softcam, licence MIT)
+  SOFTCAM_COMMIT: d1acde4617782f87a3929d7a7528fa3e524ec56b
+
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v4
@@ -22,12 +26,67 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Compiler et publier
-        run: dotnet publish pc/CameraPC/CameraPC.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
+      - name: Installer MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-      - name: Publier CameraPC.exe
+      - name: Récupérer softcam
+        shell: pwsh
+        run: |
+          git init -q ext/softcam
+          git -C ext/softcam fetch -q --depth 1 https://github.com/tshino/softcam.git $env:SOFTCAM_COMMIT
+          git -C ext/softcam checkout -q FETCH_HEAD
+
+      - name: Renommer la webcam en LynxCam
+        shell: pwsh
+        run: |
+          $file = "ext/softcam/src/softcam/softcam.cpp"
+          $code = Get-Content $file -Raw
+          $code = $code.Replace('L"DirectShow Softcam"', 'L"LynxCam"')
+          # Identifiant propre à LynxCam (le même que VirtualCamera.ClassId dans l'app PC)
+          $code = $code.Replace('0xaef3b972, 0x5fa5, 0x4647, 0x95, 0x71, 0x35, 0x8e, 0xb4, 0x72, 0xbc, 0x9e',
+                                '0xb466dbf9, 0x7f46, 0x45f6, 0x97, 0xf3, 0x7f, 0x55, 0x54, 0x27, 0x00, 0x42')
+          if (-not $code.Contains('L"LynxCam"') -or -not $code.Contains('0xb466dbf9')) { throw "Renommage de softcam raté" }
+          Set-Content $file $code -NoNewline
+
+      - name: Compiler softcam (64 et 32 bits)
+        shell: pwsh
+        run: |
+          msbuild ext/softcam/softcam.sln /t:softcam /m /v:minimal /p:Configuration=Release /p:Platform=x64
+          if ($LASTEXITCODE -ne 0) { throw "softcam 64 bits : échec" }
+          msbuild ext/softcam/softcam.sln /t:softcam /m /v:minimal /p:Configuration=Release /p:Platform=Win32
+          if ($LASTEXITCODE -ne 0) { throw "softcam 32 bits : échec" }
+
+      - name: Ajouter softcam.dll à l'app
+        shell: pwsh
+        run: |
+          $dlls = Get-ChildItem ext/softcam -Recurse -Filter softcam.dll
+          $dlls | ForEach-Object { Write-Host $_.FullName }
+          $x64 = $dlls | Where-Object { $_.FullName -match '\\x64\\Release\\' } | Select-Object -First 1
+          $x86 = $dlls | Where-Object { $_.FullName -match '\\Win32\\Release\\' } | Select-Object -First 1
+          if (-not $x64 -or -not $x86) { throw "softcam.dll introuvable" }
+          New-Item -ItemType Directory -Force pc/CameraPC/VirtualCam/x64, pc/CameraPC/VirtualCam/x86 | Out-Null
+          Copy-Item $x64.FullName pc/CameraPC/VirtualCam/x64/
+          Copy-Item $x86.FullName pc/CameraPC/VirtualCam/x86/
+          Copy-Item ext/softcam/LICENSE pc/CameraPC/VirtualCam/LICENSE-softcam.txt
+
+      - name: Compiler et publier LynxCam
+        run: dotnet publish pc/CameraPC/CameraPC.csproj -c Release -r win-x64 --self-contained false -o publish/LynxCam
+
+      - name: Test de démarrage (la fenêtre s'ouvre sans erreur)
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath publish/LynxCam/LynxCam.exe -ArgumentList "--smoke-test" -PassThru
+          $null = $process.Handle
+          if (-not $process.WaitForExit(90000)) { $process.Kill(); throw "LynxCam ne s'est pas fermé tout seul" }
+          $log = Join-Path $env:LOCALAPPDATA "LynxCam/crash.log"
+          if (Test-Path $log) { Get-Content $log }
+          if ($process.ExitCode -ne 0) { throw "LynxCam a planté au démarrage (code $($process.ExitCode))" }
+          if (-not (Test-Path publish/LynxCam/VirtualCam/x64/softcam.dll)) { throw "webcam virtuelle absente du dossier" }
+          Write-Host "Démarrage OK"
+
+      - name: Publier le dossier LynxCam
         uses: actions/upload-artifact@v4
         with:
-          name: CameraPC-windows
-          path: publish/CameraPC.exe
+          name: LynxCam-windows
+          path: publish/LynxCam/
           retention-days: 30

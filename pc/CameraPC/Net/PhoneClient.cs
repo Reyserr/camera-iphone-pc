@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -10,8 +12,8 @@ using System.Threading.Tasks;
 namespace CameraPC.Net;
 
 /// <summary>
-/// Connexion TCP vers l'app iPhone : reçoit les images et l'état, envoie les commandes.
-/// Les événements sont levés sur un fil de fond (pas sur le fil de l'interface).
+/// Connexion vers l'app iPhone, en Wi-Fi (adresse IP) ou par câble USB : reçoit les images, le son et l'état,
+/// envoie les commandes. Les événements sont levés sur un fil de fond (pas sur le fil de l'interface).
 /// </summary>
 public sealed class PhoneClient : IDisposable
 {
@@ -22,16 +24,15 @@ public sealed class PhoneClient : IDisposable
     private CancellationTokenSource? _cts;
     private long _bytesReceived;
 
-    /// <summary>Message pour le journal.</summary>
     public event Action<string>? Log;
-    /// <summary>Connecté (true) ou déconnecté (false).</summary>
     public event Action<bool>? ConnectionChanged;
-    /// <summary>Infos de l'iPhone envoyées à la connexion.</summary>
     public event Action<JsonElement>? HelloReceived;
-    /// <summary>État de la caméra et de l'iPhone (environ 1 fois par seconde).</summary>
     public event Action<JsonElement>? StatusReceived;
     /// <summary>Image reçue : message complet (l'image JPEG commence à l'octet 8) et horodatage iPhone en ms.</summary>
     public event Action<byte[], ulong>? FrameReceived;
+    public event Action<AudioPacket>? AudioReceived;
+    /// <summary>Photo prise par l'iPhone (JPEG pleine qualité).</summary>
+    public event Action<byte[]>? PhotoReceived;
     /// <summary>Temps d'aller-retour mesuré, en millisecondes.</summary>
     public event Action<double>? PingMeasured;
 
@@ -40,30 +41,54 @@ public sealed class PhoneClient : IDisposable
         get { lock (_gate) return _client != null; }
     }
 
-    /// <summary>Octets reçus depuis le dernier appel (pour calculer le débit).</summary>
+    /// <summary>« Wi-Fi » ou « USB » pendant une connexion.</summary>
+    public string Mode { get; private set; } = "";
+
     public long TakeBytesReceived() => Interlocked.Exchange(ref _bytesReceived, 0);
 
-    public async Task ConnectAsync(string host, int port, CancellationToken cancellationToken = default)
-    {
-        Disconnect();
-
-        var client = new TcpClient { NoDelay = true, ReceiveBufferSize = 1 << 20 };
-        using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+    /// <summary>Connexion Wi-Fi à l'adresse IP affichée par l'iPhone.</summary>
+    public Task ConnectAsync(string host, int port, CancellationToken cancellationToken = default) =>
+        ConnectCoreAsync("Wi-Fi", $"{host}:{port}", async ct =>
         {
-            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            var client = new TcpClient { NoDelay = true, ReceiveBufferSize = 1 << 20 };
             try
             {
-                await client.ConnectAsync(host, port, timeout.Token);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                client.Dispose();
-                throw new TimeoutException($"Pas de réponse de {host}:{port} après 5 secondes.");
+                await client.ConnectAsync(host, port, ct);
+                return client;
             }
             catch
             {
                 client.Dispose();
                 throw;
+            }
+        }, cancellationToken);
+
+    /// <summary>Connexion par câble USB au premier iPhone branché.</summary>
+    public Task ConnectUsbAsync(int port, CancellationToken cancellationToken = default) =>
+        ConnectCoreAsync("USB", "USB", async ct =>
+        {
+            var devices = await UsbMux.ListDevicesAsync(ct);
+            var device = devices.FirstOrDefault()
+                         ?? throw new IOException("aucun iPhone branché en USB (déverrouille-le et touche « Se fier »).");
+            return await UsbMux.ConnectAsync(device.Id, port, ct);
+        }, cancellationToken);
+
+    private async Task ConnectCoreAsync(string mode, string target, Func<CancellationToken, Task<TcpClient>> open,
+                                        CancellationToken cancellationToken)
+    {
+        Disconnect();
+
+        TcpClient client;
+        using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            timeout.CancelAfter(TimeSpan.FromSeconds(6));
+            try
+            {
+                client = await open(timeout.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"pas de réponse de {target} après 6 secondes.");
             }
         }
 
@@ -74,6 +99,7 @@ public sealed class PhoneClient : IDisposable
             _client = client;
             _stream = stream = client.GetStream();
             _cts = cts;
+            Mode = mode;
         }
 
         ConnectionChanged?.Invoke(true);
@@ -128,7 +154,7 @@ public sealed class PhoneClient : IDisposable
                 int length = BinaryPrimitives.ReadInt32BigEndian(header);
                 byte type = header[4];
                 if (length < 0 || length > WireProtocol.MaxPayload)
-                    throw new InvalidDataException($"Taille de message invalide : {length}");
+                    throw new InvalidDataException($"taille de message invalide : {length}");
 
                 var payload = new byte[length];
                 if (length > 0) await stream.ReadExactlyAsync(payload, ct);
@@ -160,6 +186,17 @@ public sealed class PhoneClient : IDisposable
         {
             case WireProtocol.FrameJpeg when payload.Length > 8:
                 FrameReceived?.Invoke(payload, BinaryPrimitives.ReadUInt64BigEndian(payload));
+                break;
+            case WireProtocol.AudioPcm when payload.Length > 8:
+                AudioReceived?.Invoke(new AudioPacket(
+                    SampleRate: (int)BinaryPrimitives.ReadUInt32BigEndian(payload),
+                    Channels: Math.Max(1, (int)payload[4]),
+                    BitsPerSample: payload[5],
+                    IsFloat: (payload[6] & 1) != 0,
+                    Data: payload, Offset: 8, Count: payload.Length - 8));
+                break;
+            case WireProtocol.Photo when payload.Length > 0:
+                PhotoReceived?.Invoke(payload);
                 break;
             case WireProtocol.Hello:
                 if (TryParseJson(payload, out var hello)) HelloReceived?.Invoke(hello);

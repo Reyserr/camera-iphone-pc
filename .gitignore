@@ -10,3 +10,7 @@ ios/*.xcodeproj/
 ios/build/
 ios/Payload/
 *.ipa
+
+# Ajoutés par la compilation GitHub
+pc/CameraPC/VirtualCam/
+ext/

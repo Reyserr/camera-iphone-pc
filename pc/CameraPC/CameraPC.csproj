@@ -7,11 +7,26 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>CameraPC</RootNamespace>
-    <AssemblyName>CameraPC</AssemblyName>
-    <Version>1.0.0</Version>
-    <Product>Caméra iPhone → PC</Product>
+    <AssemblyName>LynxCam</AssemblyName>
+    <Version>2.0.0</Version>
+    <Product>LynxCam</Product>
+    <Description>Ton iPhone comme webcam pour ton PC</Description>
+    <ApplicationIcon>Assets\LynxCam.ico</ApplicationIcon>
+    <!-- Le thème Fluent (ThemeMode) est marqué « expérimental » par Microsoft. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <!-- Permet aussi de compiler depuis une machine non Windows (vérification). -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\LynxCam.ico" />
+    <Resource Include="Assets\LynxCam.png" />
+    <!-- Webcam virtuelle : softcam.dll, ajoutée par la compilation GitHub (build-pc.yml). -->
+    <None Include="VirtualCam\**\*.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>
