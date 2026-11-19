@@ -1,0 +1,33 @@
+# Compile l'app PC sur une machine Windows de GitHub et fournit CameraPC.exe prêt à lancer.
+# (Tu peux aussi la compiler toi-même avec Visual Studio : ouvre pc/CameraPC.sln.)
+name: Build PC
+
+on:
+  push:
+    paths:
+      - "pc/**"
+      - ".github/workflows/build-pc.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Compiler et publier
+        run: dotnet publish pc/CameraPC/CameraPC.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
+
+      - name: Publier CameraPC.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: CameraPC-windows
+          path: publish/CameraPC.exe
+          retention-days: 30
