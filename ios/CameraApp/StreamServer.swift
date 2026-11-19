@@ -19,6 +19,11 @@ final class StreamServer {
     var onConnectionChange: ((Bool, String) -> Void)?
     /// Contenu du message HELLO envoyé au PC à la connexion.
     var helloProvider: (() -> [String: Any])?
+    /// Photo d'arrière-plan reçue du PC.
+    var onBackgroundImage: ((Data) -> Void)?
+
+    /// Vrai si un PC est connecté.
+    var isConnected: Bool { lock.withLock { connected } }
 
     // MARK: - Démarrage
 
@@ -154,6 +159,8 @@ final class StreamServer {
             if let object = try? JSONSerialization.jsonObject(with: payload) as? [String: Any] {
                 onCommand?(object)
             }
+        case .backgroundImage:
+            onBackgroundImage?(payload)
         default:
             break
         }

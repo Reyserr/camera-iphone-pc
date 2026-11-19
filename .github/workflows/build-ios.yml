@@ -1,4 +1,4 @@
-# Compile l'app iPhone sur un Mac de GitHub et fournit le fichier CameraApp.ipa (non signé).
+# Compile l'app iPhone LynxCam sur un Mac de GitHub et fournit le fichier LynxCam.ipa (non signé).
 # Sideloadly le signe ensuite avec ton identifiant Apple au moment de l'installation.
 name: Build iOS
 
@@ -44,12 +44,12 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/CameraApp.app Payload/
-          zip -qry CameraApp.ipa Payload
-          ls -lh CameraApp.ipa
+          zip -qry LynxCam.ipa Payload
+          ls -lh LynxCam.ipa
 
       - name: Publier le .ipa
         uses: actions/upload-artifact@v4
         with:
-          name: CameraApp-ipa
-          path: ios/CameraApp.ipa
+          name: LynxCam-ipa
+          path: ios/LynxCam.ipa
           retention-days: 30

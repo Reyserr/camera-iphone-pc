@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>fr</string>
 	<key>CFBundleDisplayName</key>
-	<string>Caméra PC</string>
+	<string>LynxCam</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -39,6 +39,10 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>La caméra filme l'image envoyée à ton PC.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Le micro envoie le son de l'iPhone à ton PC et l'ajoute à tes vidéos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Tes photos et vidéos LynxCam sont enregistrées dans ta galerie.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Le réseau local permet à ton PC de se connecter à l'iPhone pour recevoir l'image.</string>
 	<key>NSBonjourServices</key>
